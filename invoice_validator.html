@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>eTIMS Invoice Validator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2236;
+    --border: #1e2d47;
+    --accent: #00d4ff;
+    --accent2: #00ff9d;
+    --warn: #ffb800;
+    --danger: #ff4d6d;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  /* Header */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-logo {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-weight: 600; font-size: 14px; color: #000;
+  }
+  .header-title { font-size: 16px; font-weight: 600; letter-spacing: 0.02em; }
+  .header-sub { font-size: 12px; color: var(--muted); font-family: var(--mono); margin-left: auto; }
+
+  /* Main layout */
+  .main { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+
+  /* Drop zone */
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 48px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface);
+    position: relative;
+    margin-bottom: 24px;
+  }
+  .dropzone:hover, .dropzone.drag { border-color: var(--accent); background: rgba(0,212,255,0.04); }
+  .dropzone-icon { font-size: 40px; margin-bottom: 12px; }
+  .dropzone h2 { font-size: 18px; font-weight: 500; margin-bottom: 6px; }
+  .dropzone p { color: var(--muted); font-size: 13px; }
+  .dropzone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+
+  /* Or paste */
+  .paste-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .paste-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .paste-header span { color: var(--accent); }
+  textarea {
+    width: 100%; background: transparent; border: none; outline: none;
+    color: var(--text); font-family: var(--mono); font-size: 12px;
+    padding: 16px; resize: vertical; min-height: 120px;
+  }
+
+  /* Buttons */
+  .btn-row { display: flex; gap: 12px; margin-bottom: 32px; flex-wrap: wrap; }
+  .btn {
+    padding: 10px 24px; border-radius: 8px; font-family: var(--sans);
+    font-size: 14px; font-weight: 500; cursor: pointer; border: none;
+    transition: all 0.15s; display: flex; align-items: center; gap: 8px;
+  }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-primary:hover { background: #00b8d9; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-success { background: var(--accent2); color: #000; }
+  .btn-success:hover { background: #00d982; }
+
+  /* Results */
+  .results { display: none; }
+  .results.show { display: block; }
+
+  /* Summary bar */
+  .summary {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px; margin-bottom: 24px;
+  }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 20px;
+  }
+  .stat-label { font-size: 11px; color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  .stat-value { font-size: 28px; font-weight: 600; font-family: var(--mono); }
+  .stat-value.ok { color: var(--accent2); }
+  .stat-value.warn { color: var(--warn); }
+  .stat-value.err { color: var(--danger); }
+  .stat-value.info { color: var(--accent); }
+
+  /* Invoice table */
+  .table-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; margin-bottom: 24px;
+  }
+  .table-title {
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 13px; font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot.ok { background: var(--accent2); }
+  .dot.err { background: var(--danger); }
+  .dot.warn { background: var(--warn); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th {
+    padding: 10px 14px; text-align: left; font-family: var(--mono);
+    font-size: 11px; color: var(--muted); font-weight: 500;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+    background: rgba(0,0,0,0.2);
+  }
+  td {
+    padding: 10px 14px; border-bottom: 1px solid rgba(30,45,71,0.5);
+    font-family: var(--mono); font-size: 12px; white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr.row-err { background: rgba(255,77,109,0.05); }
+  tr.row-ok { background: transparent; }
+  tr.row-fixed { background: rgba(0,255,157,0.04); }
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;
+  }
+  .badge.ok { background: rgba(0,255,157,0.15); color: var(--accent2); }
+  .badge.err { background: rgba(255,77,109,0.15); color: var(--danger); }
+  .badge.fixed { background: rgba(0,212,255,0.15); color: var(--accent); }
+  .badge.cn { background: rgba(255,184,0,0.15); color: var(--warn); }
+  .num { text-align: right; }
+
+  /* Issue cards */
+  .issues-section { margin-bottom: 24px; }
+  .issues-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--danger); display: flex; align-items: center; gap: 8px; }
+  .issue-card {
+    background: var(--surface); border: 1px solid rgba(255,77,109,0.3);
+    border-left: 3px solid var(--danger);
+    border-radius: 8px; padding: 14px 16px; margin-bottom: 10px;
+  }
+  .issue-card.fixed {
+    border-color: rgba(0,212,255,0.3); border-left-color: var(--accent);
+  }
+  .issue-inv { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .issue-msg { font-size: 13px; color: var(--text); margin-bottom: 6px; }
+  .issue-fix { font-size: 12px; color: var(--accent2); font-family: var(--mono); }
+
+  /* Download area */
+  .download-area {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px 24px;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: gap;
+  }
+  .download-info h3 { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+  .download-info p { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+
+  /* Loading */
+  .loader { display: none; align-items: center; gap: 12px; padding: 20px; color: var(--accent); font-family: var(--mono); font-size: 13px; }
+  .loader.show { display: flex; }
+  .spinner {
+    width: 20px; height: 20px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty { padding: 48px; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 13px; }
+
+  .tag-655 { color: var(--warn); font-weight: 600; }
+  .tag-zero { color: var(--danger); }
+  .tag-fixed { color: var(--accent); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">KRA</div>
+  <div class="header-title">eTIMS Invoice Validator & Corrector</div>
+  <div class="header-sub">Supplier PIN: P051183716P</div>
+</div>
+
+<div class="main">
+
+  <!-- Input area -->
+  <div class="dropzone" id="dropzone">
+    <input type="file" id="fileInput" accept=".json" />
+    <div class="dropzone-icon">📂</div>
+    <h2>Drop JSON batch file here</h2>
+    <p>or click to browse · .json files only</p>
+  </div>
+
+  <div class="paste-area">
+    <div class="paste-header"><span>{ }</span> or paste raw JSON below</div>
+    <textarea id="jsonInput" placeholder='Paste your batch JSON here e.g. {"REQUEST": {"BATCHHEADER": {...}, "BATCHDETAILS": {...}}}'></textarea>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-primary" id="validateBtn" onclick="runValidation()">⚡ Validate &amp; Correct</button>
+    <button class="btn btn-secondary" onclick="clearAll()">✕ Clear</button>
+  </div>
+
+  <div class="loader" id="loader">
+    <div class="spinner"></div>
+    <span id="loaderMsg">Processing invoices...</span>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+
+    <div class="summary" id="summaryStats"></div>
+
+    <div class="issues-section" id="issuesSection" style="display:none">
+      <div class="issues-title">⚠ Issues Found &amp; Corrected</div>
+      <div id="issuesList"></div>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-title"><span class="dot ok"></span> Invoice Validation Results</div>
+      <div style="overflow-x:auto">
+        <table id="resultsTable">
+          <thead>
+            <tr>
+              <th>Invoice</th>
+              <th>PIN of Buyer</th>
+              <th>Category</th>
+              <th>Rate</th>
+              <th class="num">Total</th>
+              <th class="num">Taxable</th>
+              <th class="num">Tax</th>
+              <th>Sum Check</th>
+              <th>Item Tax</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="download-area" id="downloadArea" style="display:none">
+      <div class="download-info">
+        <h3>✅ Corrected JSON Ready</h3>
+        <p id="downloadDesc">All issues have been fixed and validated.</p>
+      </div>
+      <button class="btn btn-success" id="downloadBtn" onclick="downloadJSON()">⬇ Download Corrected JSON</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let correctedData = null;
+let originalJSON = '';
+
+// Drag and drop
+const dz = document.getElementById('dropzone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file) readFile(file);
+});
+document.getElementById('fileInput').addEventListener('change', e => {
+  if (e.target.files[0]) readFile(e.target.files[0]);
+});
+
+function readFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => { document.getElementById('jsonInput').value = e.target.result; };
+  reader.readAsText(file);
+}
+
+function fmt(n) {
+  return parseFloat(n).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function runValidation() {
+  const raw = document.getElementById('jsonInput').value.trim();
+  if (!raw) { alert('Please paste or upload a JSON file first.'); return; }
+
+  let data;
+  try { data = JSON.parse(raw); }
+  catch(e) { alert('Invalid JSON: ' + e.message); return; }
+
+  originalJSON = raw;
+  document.getElementById('loader').classList.add('show');
+  document.getElementById('results').classList.remove('show');
+  document.getElementById('validateBtn').disabled = true;
+
+  // Use setTimeout to allow UI to update before processing
+  setTimeout(() => {
+    try {
+      processInvoices(data);
+    } catch(e) {
+      alert('Processing error: ' + e.message);
+    }
+    document.getElementById('loader').classList.remove('show');
+    document.getElementById('validateBtn').disabled = false;
+  }, 100);
+}
+
+function processInvoices(data) {
+  const invoices = data?.REQUEST?.BATCHDETAILS?.INVOICE;
+  if (!invoices || !Array.isArray(invoices)) {
+    alert('Could not find INVOICE array in JSON. Check the structure.');
+    return;
+  }
+
+  const issues = [];
+  let fixedCount = 0;
+  let okCount = 0;
+  let totalTax = 0;
+
+  // Deep clone to work on
+  const fixed = JSON.parse(JSON.stringify(data));
+  const fixedInvoices = fixed.REQUEST.BATCHDETAILS.INVOICE;
+
+  const rows = [];
+
+  fixedInvoices.forEach((inv, idx) => {
+    const mw       = inv.MiddlewareInvoiceNumber;
+    const pin      = inv.PINOfBuyer || '—';
+    const cat      = inv.InvoiceCategory;
+    const total    = parseFloat(inv.TotalInvoiceAmount);
+    let   taxable  = parseFloat(inv.TotalTaxableAmount);
+    let   tax      = parseFloat(inv.TotalTaxAmount);
+    const item     = inv.ItemDetails[0];
+    let   rate     = parseFloat(item.TaxRate);
+    let   itemTax  = parseFloat(item.TaxAmount);
+    let   itemAmt  = parseFloat(item.ItemAmount);
+    let   unitPrice= parseFloat(item.UnitPrice);
+
+    const invIssues = [];
+    let wasFixed = false;
+
+    // Check 1: 655.35 rate → fix to 16
+    if (rate === 655.35) {
+      invIssues.push({ msg: `TaxRate was 655.35 — changed to 16.00`, type: 'rate' });
+      item.TaxRate = '16.00'; rate = 16.00; wasFixed = true;
+    }
+
+    // Check 2: Zero tax on 16% invoice (not already correct)
+    if (rate === 16.00 && tax === 0.00) {
+      const expNet = Math.round((total / 1.16) * 100) / 100;
+      const expTax = Math.round((total - expNet) * 100) / 100;
+      invIssues.push({ msg: `TotalTaxAmount was 0.00 — computed: ${fmt(expTax)} KES`, fix: `Taxable: ${fmt(expNet)} | Tax: ${fmt(expTax)}`, type: 'zero' });
+      inv.TotalTaxableAmount  = expNet.toFixed(2);
+      inv.TotalTaxAmount      = expTax.toFixed(2);
+      item.UnitPrice          = expNet.toFixed(2);
+      item.ItemAmount         = expNet.toFixed(2);
+      item.TaxAmount          = expTax.toFixed(2);
+      taxable = expNet; tax = expTax; itemTax = expTax; itemAmt = expNet; unitPrice = expNet;
+      wasFixed = true;
+    }
+
+    // Check 3: After rate fix, recompute if zero
+    if (rate === 16.00 && tax === 0.00 && wasFixed) {
+      const expNet = Math.round((total / 1.16) * 100) / 100;
+      const expTax = Math.round((total - expNet) * 100) / 100;
+      inv.TotalTaxableAmount  = expNet.toFixed(2);
+      inv.TotalTaxAmount      = expTax.toFixed(2);
+      item.UnitPrice          = expNet.toFixed(2);
+      item.ItemAmount         = expNet.toFixed(2);
+      item.TaxAmount          = expTax.toFixed(2);
+      taxable = expNet; tax = expTax; itemTax = expTax; itemAmt = expNet; unitPrice = expNet;
+    }
+
+    // Re-read after fixes
+    taxable   = parseFloat(inv.TotalTaxableAmount);
+    tax       = parseFloat(inv.TotalTaxAmount);
+    itemTax   = parseFloat(item.TaxAmount);
+    itemAmt   = parseFloat(item.ItemAmount);
+    unitPrice = parseFloat(item.UnitPrice);
+
+    // Validation checks
+    const checkSum      = Math.abs(taxable + tax - total) < 0.02;
+    const checkItemTax  = Math.abs(itemTax - tax) < 0.02;
+    const checkUP       = Math.abs(unitPrice - taxable) < 0.02;
+    const checkIA       = Math.abs(itemAmt - taxable) < 0.02;
+    const checkNoZero   = tax !== 0.00;
+
+    if (!checkSum)    invIssues.push({ msg: `Taxable (${fmt(taxable)}) + Tax (${fmt(tax)}) = ${fmt(taxable+tax)} ≠ Total (${fmt(total)})`, type: 'sum' });
+    if (!checkItemTax)invIssues.push({ msg: `ItemDetails.TaxAmount (${fmt(itemTax)}) ≠ TotalTaxAmount (${fmt(tax)})`, type: 'mismatch' });
+    if (!checkUP)     invIssues.push({ msg: `UnitPrice (${fmt(unitPrice)}) ≠ TaxableAmount (${fmt(taxable)})`, type: 'price' });
+    if (!checkIA)     invIssues.push({ msg: `ItemAmount (${fmt(itemAmt)}) ≠ TaxableAmount (${fmt(taxable)})`, type: 'amount' });
+    if (!checkNoZero) invIssues.push({ msg: `TaxAmount is still 0.00 — requires manual review`, type: 'zero' });
+
+    const allOk = checkSum && checkItemTax && checkUP && checkIA && checkNoZero;
+
+    if (invIssues.length > 0) {
+      if (wasFixed) fixedCount++;
+      issues.push({ mw, pin, problems: invIssues, wasFixed });
+    }
+    if (allOk) okCount++;
+
+    totalTax += tax;
+
+    rows.push({
+      mw, pin, cat, rate: item.TaxRate, total, taxable, tax,
+      checkSum, checkItemTax, allOk, wasFixed, invIssues
+    });
+  });
+
+  correctedData = fixed;
+
+  // Render summary
+  const totalInv = rows.length;
+  const errCount = rows.filter(r => !r.allOk && !r.wasFixed).length;
+  document.getElementById('summaryStats').innerHTML = `
+    <div class="stat"><div class="stat-label">Total Invoices</div><div class="stat-value info">${totalInv}</div></div>
+    <div class="stat"><div class="stat-label">Valid</div><div class="stat-value ok">${okCount}</div></div>
+    <div class="stat"><div class="stat-label">Auto-Fixed</div><div class="stat-value warn">${fixedCount}</div></div>
+    <div class="stat"><div class="stat-label">Errors</div><div class="stat-value err">${errCount}</div></div>
+    <div class="stat"><div class="stat-label">Total Tax (KES)</div><div class="stat-value info" style="font-size:18px">${fmt(totalTax)}</div></div>
+  `;
+
+  // Render issues
+  if (issues.length > 0) {
+    document.getElementById('issuesSection').style.display = 'block';
+    document.getElementById('issuesList').innerHTML = issues.map(is => `
+      <div class="issue-card ${is.wasFixed ? 'fixed' : ''}">
+        <div class="issue-inv">${is.mw} &nbsp;·&nbsp; PIN: ${is.pin}</div>
+        ${is.problems.map(p => `
+          <div class="issue-msg">⚠ ${p.msg}</div>
+          ${p.fix ? `<div class="issue-fix">→ Fixed: ${p.fix}</div>` : ''}
+        `).join('')}
+        ${is.wasFixed ? '<div class="issue-fix" style="margin-top:6px">✓ All corrections applied automatically</div>' : ''}
+      </div>
+    `).join('');
+  } else {
+    document.getElementById('issuesSection').style.display = 'none';
+  }
+
+  // Render table
+  document.getElementById('tableBody').innerHTML = rows.map(r => `
+    <tr class="${r.allOk ? 'row-ok' : r.wasFixed ? 'row-fixed' : 'row-err'}">
+      <td style="font-size:11px">${r.mw}</td>
+      <td style="font-size:11px">${r.pin}</td>
+      <td>${r.cat === 'Credit Note' ? '<span class="badge cn">Credit Note</span>' : '<span style="color:var(--muted);font-size:11px">Tax Invoice</span>'}</td>
+      <td>${parseFloat(r.rate) === 655.35 ? `<span class="tag-655">655.35→16</span>` : r.rate}</td>
+      <td class="num">${fmt(r.total)}</td>
+      <td class="num">${fmt(r.taxable)}</td>
+      <td class="num">${fmt(r.tax)}</td>
+      <td>${r.checkSum ? '✓' : '<span style="color:var(--danger)">✗</span>'}</td>
+      <td>${r.checkItemTax ? '✓' : '<span style="color:var(--danger)">✗</span>'}</td>
+      <td>
+        ${r.allOk && !r.wasFixed ? '<span class="badge ok">✓ Valid</span>' : ''}
+        ${r.wasFixed ? '<span class="badge fixed">⚡ Fixed</span>' : ''}
+        ${!r.allOk && !r.wasFixed ? '<span class="badge err">✗ Error</span>' : ''}
+      </td>
+    </tr>
+  `).join('');
+
+  // Show download if any fixes or all valid
+  document.getElementById('downloadArea').style.display = 'flex';
+  document.getElementById('downloadDesc').textContent =
+    fixedCount > 0
+      ? `${fixedCount} invoice(s) were corrected. ${okCount} were already valid.`
+      : `All ${okCount} invoices validated successfully — no corrections needed.`;
+
+  document.getElementById('results').classList.add('show');
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function downloadJSON() {
+  if (!correctedData) return;
+  const blob = new Blob([JSON.stringify(correctedData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const date = correctedData?.REQUEST?.BATCHHEADER?.DateOfTransaction?.slice(0,10) || 'batch';
+  a.href = url;
+  a.download = `corrected_invoices_${date}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function clearAll() {
+  document.getElementById('jsonInput').value = '';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('results').classList.remove('show');
+  correctedData = null;
+}
+</script>
+</body>
+</html>
